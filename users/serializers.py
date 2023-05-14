@@ -3,10 +3,11 @@ from users.models import User
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
+
 class ReadUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('username', 'nickname', 'email', 'is_seller',)
+        fields = ('username','email','is_seller',)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -36,7 +37,7 @@ class UserSerializer(serializers.ModelSerializer):
         # 회원 정보 수정, 오버라이딩
     def update(self, instance, validated_data):
         user = super().update(instance, validated_data)
-        # 비밀번호 복호화 ()
+        # 비밀번호 해싱
         user.set_password(user.password)
         user.save()
         return user
@@ -48,7 +49,6 @@ class ComtomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token['email'] = user.email
         token['username'] = user.username
-        token['nickname'] = user.nickname
         token['is_seller'] = user.is_seller
         return token
 
@@ -69,12 +69,10 @@ class ReadProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('nickname', 'email', 'followings', 'followers',
-                  'is_seller', 'image', 'status_message')
+        fields = ('username','email','followings','followers','is_seller','image','status_message')
 
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('image', 'status_message',)
-        # exclude = ("owner",)
+        fields = ('image','status_message',)
