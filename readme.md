@@ -28,6 +28,9 @@
 ![ERDcloud](https://github.com/jstyoon/b4teamtoy/assets/103176409/43b5d8d5-fe3e-4641-b3b3-bb6bee0e8d9c)
 
 ---
+## 프론트 저장소
+
+https://github.com/sungsu05/B4Games_Front
 
 ## 백엔드 이슈
 
