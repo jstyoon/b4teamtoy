@@ -24,296 +24,77 @@
 
 ## [ERD](https://www.erdcloud.com/d/7KTHFPDdfAvAcpLas)
 
+![old](https://github.com/jstyoon/b4teamtoy/assets/103176409/9f82746e-17f4-4428-a4f2-72d3c3cd3e16)
+![ERDcloud](https://github.com/jstyoon/b4teamtoy/assets/103176409/43b5d8d5-fe3e-4641-b3b3-bb6bee0e8d9c)
+
 ---
 
 ## 백엔드 이슈
 
-추후 피드백을 반영하고 학습하기 위해 기록합니다
+프론트와 서버 배포가 완료되지 않은 관계로 추후 피드백을 반영하고 학습하기 위한 용도로 이슈를 기록했습니다
 
-- [x] 해결 이슈
-- [ ] 미결 이슈
+### 프로젝트 초기 설정
 
----
+![0509에러1](https://github.com/jstyoon/b4teamtoy/assets/103176409/415f174b-ebba-4e60-b87d-cf830ffae1e3)
+[backports.zoneinfo 0.2.1](https://pypi.org/project/backports.zoneinfo/) 개발환경을 통일하지 않고 작업 진행중 `Python 3.9`버전 미만의 환경에 설치되어 다른 버전을 사용하는 작업자와 공유 시 에러를 유발하는 헤당 package확인. 버전 통합후 해결했습니다.
 
-- [x] profile 구현부가 serializer가 아닌 form을 사용하여 mvt pattern으로 구현됨.
-
-```python
-# profiles/forms.py
-from django import forms
-from .models import Profile
-
-class ProfileForm(forms.ModelForm):
-    class Meta:
-        model = Profile
-        fields = ['image', 'status']
-```
-
-```python
-# profiles/views.py
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from .forms import ProfileForm
-from .models import Profile, Follower
-
-@login_required
-def edit_profile(request):
-    profile = get_object_or_404(Profile, user=request.user)
-    if request.method == 'POST':
-        form = ProfileForm(request.POST, request.FILES, instance=profile)
-        if form.is_valid():
-            form.save()
-            messages.success(request, '프로필이 업데이트 되었습니다.')
-            return redirect('profile', username=request.user.username)
-    else:
-        form = ProfileForm(instance=profile)
-    return render(request, 'profiles/edit_profile.html', {'form': form})
-
-def profile(request, username):
-    profile = get_object_or_404(Profile, user__username=username)
-    following = Follower.objects.filter(user=profile.user).count()
-```
-
-> => 변경
-
-```python
-from rest_framework import serializers
-
-...
-
-class ReadProfileSerializer(serializers.ModelSerializer):
-
-    followers = serializers.StringRelatedField(many=True)
-    followings = serializers.StringRelatedField(many=True)
-    post_count = serializers.SerializerMethodField()
-
-    def get_post_count(self, obj):
-        return obj.post_set.count()
-
-    class Meta:
-        model = User
-        fields = ('username', 'email', 'followings', 'followers', 'is_seller', 'image', 'status_message','post_count')
-
-class UpdateProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ('username','image','status_message',)
-```
-
-```python
-from rest_framework.views import APIView
-...
-class ProfileView(APIView):
-    # owner의 프로필 읽기 (public)
-    def get(self, request, user_id):
-        owner = get_object_or_404(User, id=user_id)
-        serializer = ReadProfileSerializer(owner)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    # owner를 팔로우,언팔로우
-    def post(self, request, user_id):
-        # if not request.user.is_authenticated:
-        #     return Response("로그인이 필요합니다.", status=status.HTTP_401_UNAUTHORIZED)
-
-        owner = get_object_or_404(User, id=user_id)
-
-        if request.user == owner:
-            return Response("나 자신을 팔로우 할 수 없습니다.", status=status.HTTP_400_BAD_REQUEST)
-
-        if request.user in owner.followers.all():
-            owner.followers.remove(request.user)
-            return Response("unfollow", status=status.HTTP_200_OK)
-        else:
-            owner.followers.add(request.user)
-            return Response("follow", status=status.HTTP_200_OK)
-```
+> 가장 먼저 팀 개발 환경을 동일하게 합니다.
 
 ---
 
-- [ ] 유저모델(User)에 판매자 계정 필드`is_seller(Boolean)`를 추가하여
-      유저를구분하고 회원가입을 구현했습니다. 하지만 판매자의 권한을 정의할 수 있는 shop application (`결제` or `판매`) 없는 상태입니다. 서비스의 핵심 기능을 먼저 정의하고 기획하는 부분이 중요합니다.
+### 디자인 패턴
+
+mvc 패턴으로 작성된 프로필 구현부를 serializer를 사용하여 변경 해주었습니다.
+
+> mvc, mvt 패턴 개념을 이해하고 기능을 정의해야 합니다.
+> [Difference between MVC and MVT design patterns](https://www.geeksforgeeks.org/difference-between-mvc-and-mvt-design-patterns/)
 
 ---
 
-- [x] [backports.zoneinfo 0.2.1](https://pypi.org/project/backports.zoneinfo/) 개발환경을 통일하지 않고 작업 진행중 `Python 3.9`버전 미만의 환경에 설치되어 다른 버전을 사용하는 작업자와 공유 시 에러를 유발하는 헤당 package확인. 버전 통합후 해결했습니다.
+### 서비스 코어 계획
 
-  > > 팀 개발 환경 설정을 먼저 해야합니다.
+유저모델(User)에 판매자 계정 필드`is_seller(Boolean)`를 추가하여 유저를구분하고 회원가입을 구현했습니다. 하지만 판매자의 권한을 정의할 수 있는 shop application (`결제` or `판매`) 을 정의하지 못하고 결국 핵심기능이 서비스에 담기지 못했습니다.
 
----
-
-- [x] dotenv 시크릿키가 없었기때문에 makemigrations,migrate 에러 발생 해결 방법 dotenv같은 중요한 정보가 담긴 파일은 팀원과 공유하면 됩니다.
-
-  > > 팀원들 각자 시크릿키 재발급 받아 할 필요가 없어짐
-  > > 팀원들은 각자의 파일에 .env 파일을 만들어
-  > > 공유된 시크릿키를 사용합니다
+> 서비스의 핵심 기능을 먼저 정의하고 기획하는 부분이 중요합니다.
 
 ---
 
-- [x] 로그인, 로그아웃, 회원 가입같은 필수 기능이 완료 되었으나, 꼭 필요한 데이터인지 고민이 필요한 시점에 관성적으로 유저모델에 여러 필드를 추가했던 문제를 피드백받았습니다. 불필요한 데이터 필드는 삭제하였고 앞으로 모델 설계시에도 기능과 관계없는 필드는 넣지 않아야 합니다.
+### 모델 설계 고민
+
+![image](https://github.com/jstyoon/b4teamtoy/assets/103176409/37a6a4f8-0789-47d2-b632-d98723692e9c)
+
+    당신의 모델필드는 전부 사용되고 있나요?
+
+로그인, 로그아웃, 회원 가입같은 필수 기능이 완료 되었으나, 꼭 필요한 데이터인지 고민이 필요한 시점에 관성적으로 유저모델에 여러 필드를 추가했던 문제를 알게되었습니다.
+
+> 불필요한 데이터 필드는 삭제하였고 앞으로 모델 설계시에도 기능과 관계없는 필드는 넣지 않아야 합니다.
 
 ---
 
-- [x] 로그인시 비밀번호 암호화, 이메일 인증기능을 추가하기 위해 모델, 뷰 재정의하였습니다 [장고 공식 문서](https://docs.djangoproject.com/en/4.2/topics/auth/customizing/#substituting-a-custom-user-model)
+### 키 보안
 
-```python
-# users/models.py
-class UserManager(BaseUserManager):
+dotenv 시크릿키가 없었기때문에 makemigrations,migrate 에러가 발생했습니다. dotenv같은 중요한 정보가 담긴 파일은 팀원끼리만 공유하면 됩니다.
 
-    def check_password(self,password):
-        check = [
-            lambda element: all(
-                x.isdigit() or x.islower() or x.isupper() or (x in ['!', '@', '#', '$', '%', '^', '&', '*', '_']) for x in element),
-            # 요소 하나 하나를 순환하며 숫자,소문자,대문자,지정된 특수문자 제외한 요소가 있을경우 False
-            lambda element: len(element) == len(element.replace(" ", "")),
-            # 공백이 포함 되어 있을 경우 False
-            lambda element: True if (len(element) > 7 and len(element) < 21) else False,
-            # 전달된 값의 개수가 8~20 사이일 경우 True
-            lambda element: any(x.islower() or x.isupper() for x in element),
+> 팀원들 각자 시크릿키를 재발급 받을 필요없이
+> 각자의 파일에 .env 파일을 만들고 시크릿키를 사용합니다
 
-        ]
-        for i in check:
-            if not i(password):
-                return False
-        return True
+---
 
-    def create_user(self,email,username,is_seller,password=None):
+### 유저 모델 대체
 
-        if not self.check_password(password):
-            raise ValueError('비밀번호가 올바르지 않습니다.')
-        elif not username:
-            raise ValueError('사용자 별명은 필수 입력 사항 입니다.')
-        elif not email:
-            raise ValueError('사용자 이메일은 필수 입력 사항 입니다.')
-        elif is_seller == None:
-            raise ValueError('사용자 판매/일반 회원 여부는 필수 선택 사항 입니다.')
+로그인시 토큰사용, 비밀번호 암호화, 이메일 인증기능을 추가하기 위해 유저 모델을 대체하였습니다
 
-        user = self.model(
-            email=self.normalize_email(email),
-            username=username,
-            is_seller=is_seller,
-        )
-        user.set_password(password)
-        user.save(using=self._db)
-        return user
-```
+> 참고 : [장고프로젝트 공식 문서](https://docs.djangoproject.com/en/4.2/topics/auth/customizing/#substituting-a-custom-user-model)
 
-```python
-# users/serializers
-from rest_framework import serializers
-from users.models import User
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from posts.models import Post
+---
 
-class ReadUserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ('username','email','is_seller',)
+### Git찮아도
 
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = "__all__"
-        extra_kwargs = {
-            "password": {"write_only": True},
-            # 이메일 예외 처리 메시지
-            "email": {
-                "error_messages": {
-                "unique": "이미 존재하는 이메일입니다.",
-                "invalid": "이메일 형식이 올바르지 않습니다.",
-                "required": "False"
-                },
-            },
-        }
-    def create(self, validated_data):
-        user = super().create(validated_data)
-        # 비밀번호 해싱(암호화)
-        user.set_password(user.password)
-        user.save()
-        return user
+Git은 개발자 협업도구의 표준으로 사용되며 대다수의 개발 결과물 관리 역시 Github을 통해 이뤄집니다. 원활한 협업 진행을 위해 틈틈히 Git 명령어를 공부합니다.
 
-        # 회원 정보 수정, 오버라이딩
-    def update(self, instance, validated_data):
-        user = super().update(instance, validated_data)
-        # 비밀번호 해싱(암호화)
-        user.set_password(user.password)
-        user.save()
-        return user
+> 참고 : [Git찮아도 알아둬야할 Git명령어](https://velog.io/@4_21ee/TIL-27-Git%EC%B0%AE%EC%95%84%EB%8F%84-%EC%95%8C%EC%95%84%EB%91%AC%EC%95%BC%ED%95%A0-Git%EB%AA%85%EB%A0%B9%EC%96%B4)
 
-class ComtomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    @classmethod
-    def get_token(cls, user):
-        token = super().get_token(user)
-        token['email'] = user.email
-        token['username'] = user.username
-        token['is_seller'] = user.is_seller
-        return token
-```
-
-```python
-# users/views.py
-class AuthFunction():
-    def send_mail(self,email):
-        code = "".join([str(random.randrange(0, 10)) for i in range(6)])
-        title = "B4GAMES 가입 인증 코드 발송"
-        content = f"인증 코드 = {code}"
-        mail = EmailMessage(title, content, to=[email])
-        mail.send()
-
-        # 올바른 이메일로 발송했는지는 확인할 수 없음
-        return code
-
-    def check_password(self, password):
-        check = [
-            lambda element: all(
-                x.isdigit() or x.islower() or x.isupper() or (x in ['!', '@', '#', '$', '%', '^', '&', '*', '_']) for x
-                in element),
-            # 요소 하나 하나를 순환하며 숫자,소문자,대문자,지정된 특수문자 제외한 요소가 있을경우 False
-            lambda element: len(element) == len(element.replace(" ", "")),
-            # 공백이 포함 되어 있을 경우 False
-            lambda element: True if (len(element) > 7 and len(element) < 21) else False,
-            # 전달된 값의 개수가 8~20 사이일 경우 True
-            lambda element: any(x.islower() or x.isupper() for x in element),
-            # 요소 하나하나를 순환하며, 요소중 대문자 또는 소문자가 있어야함(숫자로만 가입 불가능)
-        ]
-        for i in check:
-            if not i(password):
-                return False
-        return True
-
-
-
-class SignUp(APIView,AuthFunction):
-    def post(self, request):
-        if not self.check_password(request.data['password']):
-            return Response({'error': '비밀번호가 올바르지 않습니다.'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            # email로 인증 코드 발송, owner의 데이터베이스에 인증 코드 저장
-            serializer.save()
-            email = serializer.validated_data.get('email')
-            owner = get_object_or_404(User, email=email)
-            owner.auth_code = self.send_mail(email)
-            # if owner.auth_code == None:
-            #     owner.delete()
-            #     return Response({'error':"이메일 정보가 올바르지 않습니다."}, status=status.HTTP_401_UNAUTHORIZED)
-
-            owner.save()
-
-            return Response({'message': f'가입을 축하합니다.'}, status=status.HTTP_201_CREATED)
-        else:
-            return Response({'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-    def put(self, request):
-        owner = get_object_or_404(User, email=request.data['email'])
-        if owner.auth_code == request.data['auth_code']:
-            owner.is_active = True
-            owner.save()
-            return Response({"message": "인증되셨습니다."}, status=status.HTTP_200_OK)
-
-        return Response({"error": "인증 코드가 올바르지 않습니다."}, status=status.HTTP_400_BAD_REQUEST)
-
-```
+---
 
 ### 회고
 
